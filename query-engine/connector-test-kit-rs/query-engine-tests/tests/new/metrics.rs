@@ -42,7 +42,7 @@ mod metrics {
 
     #[connector_test(exclude(Js))]
     async fn metrics_tx_do_not_go_negative(mut runner: Runner) -> TestResult<()> {
-        let tx_id = runner.start_tx(5000, 5000, None).await?;
+        let tx_id = runner.start_tx(5000, 5000, None, None).await?;
         runner.set_active_tx(tx_id.clone());
 
         insta::assert_snapshot!(
@@ -59,7 +59,7 @@ mod metrics {
         let active_transactions = get_gauge(&json, PRISMA_CLIENT_QUERIES_ACTIVE);
         assert_eq!(active_transactions, 0.0);
 
-        let tx_id = runner.start_tx(5000, 5000, None).await?;
+        let tx_id = runner.start_tx(5000, 5000, None, None).await?;
         runner.set_active_tx(tx_id.clone());
 
         insta::assert_snapshot!(
