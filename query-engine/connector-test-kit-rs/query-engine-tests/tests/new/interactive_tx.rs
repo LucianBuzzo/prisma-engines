@@ -468,7 +468,6 @@ mod interactive_tx {
         runner.set_active_tx(inner_tx_id.clone());
 
         // Perform operations in the inner transaction and commit
-        // ... (your operations here)
         insta::assert_snapshot!(
           run_query!(&runner, r#"mutation { createOneTestModel(data: { id: 1 }) { id }}"#),
           @r###"{"data":{"createOneTestModel":{"id":1}}}"###
@@ -478,7 +477,6 @@ mod interactive_tx {
         assert!(res.is_ok());
 
         // Perform operations in the outer transaction and commit
-        // ... (your operations here)
         insta::assert_snapshot!(
           run_query!(&runner, r#"mutation { createOneTestModel(data: { id: 2 }) { id }}"#),
           @r###"{"data":{"createOneTestModel":{"id":2}}}"###
@@ -486,6 +484,47 @@ mod interactive_tx {
 
         let res = runner.commit_tx(outer_tx_id).await?;
         assert!(res.is_ok());
+
+        Ok(())
+    }
+
+    #[connector_test(only(Postgres))]
+    async fn nested_commit_rollback_workflow(mut runner: Runner) -> TestResult<()> {
+        // Start the outer transaction
+        let outer_tx_id = runner.start_tx(5000, 5000, None, None).await?;
+        runner.set_active_tx(outer_tx_id.clone());
+
+        // Start the inner transaction
+        let inner_tx_id = runner.start_tx(5000, 5000, None, Some(outer_tx_id.clone())).await?;
+        runner.set_active_tx(inner_tx_id.clone());
+
+        // Perform operations in the inner transaction and commit
+        insta::assert_snapshot!(
+          run_query!(&runner, r#"mutation { createOneTestModel(data: { id: 1 }) { id }}"#),
+          @r###"{"data":{"createOneTestModel":{"id":1}}}"###
+        );
+
+        let res = runner.commit_tx(inner_tx_id).await?;
+        assert!(res.is_ok());
+
+        // Perform operations in the outer transaction and commit
+        insta::assert_snapshot!(
+          run_query!(&runner, r#"mutation { createOneTestModel(data: { id: 2 }) { id }}"#),
+          @r###"{"data":{"createOneTestModel":{"id":2}}}"###
+        );
+
+        // Now rollback the outer transaction
+        let res = runner.rollback_tx(outer_tx_id).await?;
+        assert!(res.is_ok());
+
+        // Assert that no records were written to the DB
+        let result_tx_id = runner.start_tx(5000, 5000, None, None).await?;
+        runner.set_active_tx(result_tx_id.clone());
+        insta::assert_snapshot!(
+          run_query!(&runner, r#"query { findManyTestModel { id field }}"#),
+          @r###"{"data":{"findManyTestModel":[]}}"###
+        );
+        let _ = runner.commit_tx(result_tx_id).await?;
 
         Ok(())
     }
