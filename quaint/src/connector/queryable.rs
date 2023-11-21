@@ -87,18 +87,36 @@ pub trait Queryable: Send + Sync {
     }
 
     /// Statement to begin a transaction
-    async fn begin_statement(&self, _depth: i32) -> String {
-        "BEGIN".to_string()
+    async fn begin_statement(&self, depth: i32) -> String {
+        println!("Depth: {}", depth);
+        let savepoint_stmt = format!("SAVEPOINT savepoint{}", depth);
+        let ret = if depth > 1 { savepoint_stmt } else { "BEGIN".to_string() };
+
+        return ret;
     }
 
     /// Statement to commit a transaction
-    async fn commit_statement(&self, _depth: i32) -> String {
-        "COMMIT".to_string()
+    async fn commit_statement(&self, depth: i32) -> String {
+        let savepoint_stmt = format!("RELEASE SAVEPOINT savepoint{}", depth);
+        let ret = if depth > 1 {
+            savepoint_stmt
+        } else {
+            "COMMIT".to_string()
+        };
+
+        return ret;
     }
 
     /// Statement to rollback a transaction
-    async fn rollback_statement(&self, _depth: i32) -> String {
-        "ROLLBACK".to_string()
+    async fn rollback_statement(&self, depth: i32) -> String {
+        let savepoint_stmt = format!("ROLLBACK TO SAVEPOINT savepoint{}", depth);
+        let ret = if depth > 1 {
+            savepoint_stmt
+        } else {
+            "ROLLBACK".to_string()
+        };
+
+        return ret;
     }
 
     /// Sets the transaction isolation level to given value.

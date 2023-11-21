@@ -14,10 +14,13 @@ extern crate metrics as metrics;
 #[async_trait]
 pub trait Transaction: Queryable {
     /// Commit the changes to the database and consume the transaction.
-    async fn commit(&mut self) -> crate::Result<()>;
+    async fn begin(&mut self) -> crate::Result<()>;
+
+    /// Commit the changes to the database and consume the transaction.
+    async fn commit(&mut self) -> crate::Result<i32>;
 
     /// Rolls back the changes to the database.
-    async fn rollback(&mut self) -> crate::Result<()>;
+    async fn rollback(&mut self) -> crate::Result<i32>;
 
     /// workaround for lack of upcasting between traits https://github.com/rust-lang/rust/issues/65991
     fn as_queryable(&self) -> &dyn Queryable;
@@ -88,22 +91,46 @@ impl<'a> DefaultTransaction<'a> {
 
 #[async_trait]
 impl<'a> Transaction for DefaultTransaction<'a> {
-    /// Commit the changes to the database and consume the transaction.
-    async fn commit(&mut self) -> crate::Result<()> {
+    async fn begin(&mut self) -> crate::Result<()> {
         decrement_gauge!("prisma_client_queries_active", 1.0);
 
         let mut depth_guard = self.depth.lock().await;
 
-        self.inner.raw_cmd(&self.commit_stmt).await?;
-
         // Modify the depth value through the MutexGuard
-        *depth_guard -= 1;
+        *depth_guard += 1;
+
+        let st_depth = *depth_guard;
+
+        let begin_statement = self.begin_statement(st_depth).await;
+
+        println!("!!!!! DefaultTransaction::begin");
+
+
+        self.inner.raw_cmd(&begin_statement).await?;
 
         Ok(())
     }
 
+    /// Commit the changes to the database and consume the transaction.
+    async fn commit(&mut self) -> crate::Result<i32> {
+        decrement_gauge!("prisma_client_queries_active", 1.0);
+
+        let mut depth_guard = self.depth.lock().await;
+
+        let st_depth = *depth_guard;
+
+        let commit_stmt = self.commit_statement(st_depth).await;
+
+        self.inner.raw_cmd(&commit_stmt).await?;
+
+        // Modify the depth value through the MutexGuard
+        *depth_guard -= 1;
+
+        Ok(*depth_guard)
+    }
+
     /// Rolls back the changes to the database.
-    async fn rollback(&mut self) -> crate::Result<()> {
+    async fn rollback(&mut self) -> crate::Result<i32> {
         decrement_gauge!("prisma_client_queries_active", 1.0);
 
         let mut depth_guard = self.depth.lock().await;
@@ -113,7 +140,7 @@ impl<'a> Transaction for DefaultTransaction<'a> {
         // Modify the depth value through the MutexGuard
         *depth_guard -= 1;
 
-        Ok(())
+        Ok(*depth_guard)
     }
 
     fn as_queryable(&self) -> &dyn Queryable {

@@ -46,6 +46,9 @@ pub(crate) struct TransactionProxy {
     /// transaction options
     options: TransactionOptions,
 
+    /// being trnsaction
+    pub begin: AsyncJsFunction<(), ()>,
+
     /// commit transaction
     commit: AsyncJsFunction<(), ()>,
 
@@ -577,11 +580,13 @@ pub struct TransactionOptions {
 impl TransactionProxy {
     pub fn new(js_transaction: &JsObject) -> napi::Result<Self> {
         let commit = js_transaction.get_named_property("commit")?;
+        let begin = js_transaction.get_named_property("begin")?;
         let rollback = js_transaction.get_named_property("rollback")?;
         let dispose = js_transaction.get_named_property("dispose")?;
         let options = js_transaction.get_named_property("options")?;
 
         Ok(Self {
+            begin,
             commit,
             rollback,
             dispose,
@@ -591,6 +596,10 @@ impl TransactionProxy {
 
     pub fn options(&self) -> &TransactionOptions {
         &self.options
+    }
+
+    pub async fn begin(&self) -> quaint::Result<()> {
+        self.begin.call(()).await
     }
 
     pub async fn commit(&self) -> quaint::Result<()> {

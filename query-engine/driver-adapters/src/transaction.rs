@@ -48,6 +48,25 @@ impl JsTransaction {
 
 #[async_trait]
 impl QuaintTransaction for JsTransaction {
+    async fn begin(&mut self) -> quaint::Result<()> {
+        // increment of this gauge is done in DriverProxy::startTransaction
+        decrement_gauge!("prisma_client_queries_active", 1.0);
+
+        let mut depth_guard = self.depth.lock().await;
+        let commit_stmt = "BEGIN";
+
+        if self.options().use_phantom_query {
+            let commit_stmt = JsBaseQueryable::phantom_query_message(commit_stmt);
+            self.raw_phantom_cmd(commit_stmt.as_str()).await?;
+        } else {
+            self.inner.raw_cmd(commit_stmt).await?;
+        }
+
+        // Modify the depth value through the MutexGuard
+        *depth_guard += 1;
+
+        self.tx_proxy.begin().await
+    }
     async fn commit(&mut self) -> quaint::Result<()> {
         // increment of this gauge is done in DriverProxy::startTransaction
         decrement_gauge!("prisma_client_queries_active", 1.0);

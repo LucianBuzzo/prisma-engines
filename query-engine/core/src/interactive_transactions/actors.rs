@@ -62,15 +62,41 @@ impl<'a> ITXServer<'a> {
                 let _ = op.respond_to.send(TxOpResponse::Batch(result));
                 RunState::Continue
             }
+            TxOpRequestMsg::Begin => {
+                let resp = self.begin().await;
+                let _ = op.respond_to.send(TxOpResponse::Begin(resp));
+                RunState::Continue
+            }
             TxOpRequestMsg::Commit => {
                 let resp = self.commit().await;
+                println!("!!!!!!!! COMMIT {:?}", resp);
+                let resp_value = match resp {
+                    Ok(val) => val,
+                    Err(_) => 0,
+                };
+
                 let _ = op.respond_to.send(TxOpResponse::Committed(resp));
-                RunState::Finished
+
+                if resp_value > 0 {
+                    RunState::Continue
+                } else {
+                    RunState::Finished
+                }
             }
             TxOpRequestMsg::Rollback => {
                 let resp = self.rollback(false).await;
+                println!("!!!!!!!! ROLLBACK {:?}", resp);
+                let resp_value = match resp {
+                    Ok(val) => val,
+                    Err(_) => 0,
+                };
                 let _ = op.respond_to.send(TxOpResponse::RolledBack(resp));
-                RunState::Finished
+
+                if resp_value > 0 {
+                    RunState::Continue
+                } else {
+                    RunState::Finished
+                }
             }
         }
     }
@@ -112,32 +138,47 @@ impl<'a> ITXServer<'a> {
         .await
     }
 
-    pub(crate) async fn commit(&mut self) -> crate::Result<()> {
+    pub(crate) async fn begin(&mut self) -> crate::Result<()> {
         if let CachedTx::Open(_) = self.cached_tx {
             let open_tx = self.cached_tx.as_open()?;
-            trace!("[{}] committing.", self.id.to_string());
-            open_tx.commit().await?;
-            self.cached_tx = CachedTx::Committed;
+            trace!("[{}] beginning.", self.id.to_string());
+            println!("!!!!!!!! beginning");
+            open_tx.begin().await?;
         }
 
         Ok(())
     }
 
-    pub(crate) async fn rollback(&mut self, was_timeout: bool) -> crate::Result<()> {
+    pub(crate) async fn commit(&mut self) -> crate::Result<i32> {
+        if let CachedTx::Open(_) = self.cached_tx {
+            let open_tx = self.cached_tx.as_open()?;
+            trace!("[{}] committing.", self.id.to_string());
+            let depth = open_tx.commit().await?;
+            if depth == 0 {
+                self.cached_tx = CachedTx::Committed;
+            }
+            return Ok(depth);
+        }
+
+        Ok(0)
+    }
+
+    pub(crate) async fn rollback(&mut self, was_timeout: bool) -> crate::Result<i32> {
         debug!("[{}] rolling back, was timed out = {was_timeout}", self.name());
         if let CachedTx::Open(_) = self.cached_tx {
             let open_tx = self.cached_tx.as_open()?;
-            open_tx.rollback().await?;
+            let depth = open_tx.rollback().await?;
             if was_timeout {
                 trace!("[{}] Expired Rolling back", self.id.to_string());
                 self.cached_tx = CachedTx::Expired;
-            } else {
+            } else if depth == 0 {
                 self.cached_tx = CachedTx::RolledBack;
                 trace!("[{}] Rolling back", self.id.to_string());
             }
+            return Ok(depth);
         }
 
-        Ok(())
+        Ok(0)
     }
 
     pub(crate) fn name(&self) -> String {
@@ -152,23 +193,31 @@ pub struct ITXClient {
 }
 
 impl ITXClient {
-    pub(crate) async fn commit(&self) -> crate::Result<()> {
+    pub async fn begin(&self) -> crate::Result<()> {
+        self.send_and_receive(TxOpRequestMsg::Begin).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn commit(&self) -> crate::Result<i32> {
         let msg = self.send_and_receive(TxOpRequestMsg::Commit).await?;
 
         if let TxOpResponse::Committed(resp) = msg {
             debug!("[{}] COMMITTED {:?}", self.tx_id, resp);
+            println!("!!!!!   Response: {:?}", resp);
             resp
         } else {
+            println!("!!! .commit handle_error");
             Err(self.handle_error(msg).into())
         }
     }
 
-    pub(crate) async fn rollback(&self) -> crate::Result<()> {
+    pub(crate) async fn rollback(&self) -> crate::Result<i32> {
         let msg = self.send_and_receive(TxOpRequestMsg::Rollback).await?;
 
         if let TxOpResponse::RolledBack(resp) = msg {
             resp
         } else {
+            println!("!!! .rollback handle_error");
             Err(self.handle_error(msg).into())
         }
     }
@@ -180,6 +229,7 @@ impl ITXClient {
         if let TxOpResponse::Single(resp) = msg {
             resp
         } else {
+            println!("!!! .execute handle_error");
             Err(self.handle_error(msg).into())
         }
     }
@@ -226,6 +276,7 @@ impl ITXClient {
     }
 
     fn handle_error(&self, msg: TxOpResponse) -> TransactionError {
+        println!("!!! handle_error");
         match msg {
             TxOpResponse::Committed(..) => {
                 let reason = "Transaction is no longer valid. Last state: 'Committed'".to_string();
