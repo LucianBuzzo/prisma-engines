@@ -69,7 +69,6 @@ impl<'a> ITXServer<'a> {
             }
             TxOpRequestMsg::Commit => {
                 let resp = self.commit().await;
-                println!("!!!!!!!! COMMIT {:?}", resp);
                 let resp_value = match resp {
                     Ok(val) => val,
                     Err(_) => 0,
@@ -85,7 +84,6 @@ impl<'a> ITXServer<'a> {
             }
             TxOpRequestMsg::Rollback => {
                 let resp = self.rollback(false).await;
-                println!("!!!!!!!! ROLLBACK {:?}", resp);
                 let resp_value = match resp {
                     Ok(val) => val,
                     Err(_) => 0,
@@ -142,7 +140,6 @@ impl<'a> ITXServer<'a> {
         if let CachedTx::Open(_) = self.cached_tx {
             let open_tx = self.cached_tx.as_open()?;
             trace!("[{}] beginning.", self.id.to_string());
-            println!("!!!!!!!! beginning");
             open_tx.begin().await?;
         }
 
@@ -203,10 +200,8 @@ impl ITXClient {
 
         if let TxOpResponse::Committed(resp) = msg {
             debug!("[{}] COMMITTED {:?}", self.tx_id, resp);
-            println!("!!!!!   Response: {:?}", resp);
             resp
         } else {
-            println!("!!! .commit handle_error");
             Err(self.handle_error(msg).into())
         }
     }
@@ -217,7 +212,6 @@ impl ITXClient {
         if let TxOpResponse::RolledBack(resp) = msg {
             resp
         } else {
-            println!("!!! .rollback handle_error");
             Err(self.handle_error(msg).into())
         }
     }
@@ -229,7 +223,6 @@ impl ITXClient {
         if let TxOpResponse::Single(resp) = msg {
             resp
         } else {
-            println!("!!! .execute handle_error");
             Err(self.handle_error(msg).into())
         }
     }
@@ -276,7 +269,6 @@ impl ITXClient {
     }
 
     fn handle_error(&self, msg: TxOpResponse) -> TransactionError {
-        println!("!!! handle_error");
         match msg {
             TxOpResponse::Committed(..) => {
                 let reason = "Transaction is no longer valid. Last state: 'Committed'".to_string();

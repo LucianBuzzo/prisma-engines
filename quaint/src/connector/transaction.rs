@@ -103,9 +103,6 @@ impl<'a> Transaction for DefaultTransaction<'a> {
 
         let begin_statement = self.begin_statement(st_depth).await;
 
-        println!("!!!!! DefaultTransaction::begin");
-
-
         self.inner.raw_cmd(&begin_statement).await?;
 
         Ok(())

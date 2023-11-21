@@ -73,11 +73,9 @@ impl TransactionActorManager {
         timeout: Duration,
         engine_protocol: EngineProtocol,
     ) -> crate::Result<()> {
-        println!("Creating a transaction");
-        println!("Transaction ID: {:?}", tx_id);
         // Only create a client if there is no client for this transaction yet.
+        // otherwise, begin a new transaction/savepoint for the existing client.
         if !self.clients.read().await.contains_key(&tx_id) {
-            println!("Existing transaction doesn't exist");
             let client = spawn_itx_actor(
                 query_schema.clone(),
                 tx_id.clone(),
@@ -92,7 +90,6 @@ impl TransactionActorManager {
 
             self.clients.write().await.insert(tx_id, client);
         } else {
-            println!("Existing transaction exists");
             let client = self.get_client(&tx_id, "begin").await?;
             client.begin().await?;
         }
@@ -158,7 +155,6 @@ impl TransactionActorManager {
 
     pub async fn commit_tx(&self, tx_id: &TxId) -> crate::Result<()> {
         let client = self.get_client(tx_id, "commit").await?;
-        println!("!!! Committing transaction");
         client.commit().await?;
 
         Ok(())

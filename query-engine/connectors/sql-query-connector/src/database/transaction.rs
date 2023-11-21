@@ -38,7 +38,6 @@ impl<'tx> ConnectionLike for SqlConnectorTransaction<'tx> {}
 #[async_trait]
 impl<'tx> Transaction for SqlConnectorTransaction<'tx> {
     async fn begin(&mut self) -> connector::Result<()> {
-        println!("!!!!! Beginning transaction");
         catch(self.connection_info.clone(), async move {
             self.inner.begin().await.map_err(SqlError::from)
         })
@@ -46,8 +45,6 @@ impl<'tx> Transaction for SqlConnectorTransaction<'tx> {
     }
 
     async fn commit(&mut self) -> connector::Result<i32> {
-        println!("!!!!! Committing transaction");
-
         catch(self.connection_info.clone(), async move {
             self.inner.commit().await.map_err(SqlError::from)
         })

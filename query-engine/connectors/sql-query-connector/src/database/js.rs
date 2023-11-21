@@ -164,7 +164,6 @@ impl TransactionCapable for DriverAdapter {
         &'a self,
         isolation: Option<IsolationLevel>,
     ) -> quaint::Result<Box<dyn Transaction + 'a>> {
-        println!("Starting a transaction...");
         self.connector.start_transaction(isolation).await
     }
 }

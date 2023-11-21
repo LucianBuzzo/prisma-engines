@@ -96,7 +96,6 @@ impl Display for CachedTx<'_> {
 impl<'a> CachedTx<'a> {
     /// Requires this cached TX to be `Open`, else an error will be raised that it is no longer valid.
     pub(crate) fn as_open(&mut self) -> crate::Result<&mut Box<dyn Transaction + 'a>> {
-        println!("!!!!! CachedTx::as_open");
         if let Self::Open(ref mut otx) = self {
             Ok(otx)
         } else {
