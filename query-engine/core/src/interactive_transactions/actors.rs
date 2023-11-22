@@ -72,8 +72,8 @@ impl<'a> ITXServer<'a> {
             }
             TxOpRequestMsg::Commit => {
                 let resp = self.commit().await;
-                let resp_value = match resp {
-                    Ok(val) => val,
+                let resp_value = match &resp {
+                    Ok(val) => *val,
                     Err(_) => 0,
                 };
 
@@ -87,11 +87,12 @@ impl<'a> ITXServer<'a> {
             }
             TxOpRequestMsg::Rollback => {
                 let resp = self.rollback(false).await;
-                let resp_value = match resp {
-                    Ok(val) => val,
+                let resp_value = match &resp {
+                    Ok(val) => *val,
                     Err(_) => 0,
                 };
                 let _ = op.respond_to.send(TxOpResponse::RolledBack(resp));
+
 
                 if resp_value > 0 {
                     RunState::Continue
