@@ -67,7 +67,7 @@ impl QuaintTransaction for JsTransaction {
 
         self.tx_proxy.begin().await
     }
-    async fn commit(&mut self) -> quaint::Result<()> {
+    async fn commit(&mut self) -> quaint::Result<i32> {
         // increment of this gauge is done in DriverProxy::startTransaction
         decrement_gauge!("prisma_client_queries_active", 1.0);
 
@@ -84,10 +84,12 @@ impl QuaintTransaction for JsTransaction {
         // Modify the depth value through the MutexGuard
         *depth_guard -= 1;
 
-        self.tx_proxy.commit().await
+        let _ = self.tx_proxy.commit().await;
+
+        Ok(*depth_guard)
     }
 
-    async fn rollback(&mut self) -> quaint::Result<()> {
+    async fn rollback(&mut self) -> quaint::Result<i32> {
         // increment of this gauge is done in DriverProxy::startTransaction
         decrement_gauge!("prisma_client_queries_active", 1.0);
 
@@ -104,7 +106,9 @@ impl QuaintTransaction for JsTransaction {
         // Modify the depth value through the MutexGuard
         *depth_guard -= 1;
 
-        self.tx_proxy.rollback().await
+        let _ = self.tx_proxy.rollback().await;
+
+        Ok(*depth_guard)
     }
 
     fn as_queryable(&self) -> &dyn Queryable {
