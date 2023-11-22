@@ -252,6 +252,12 @@ fn js_value_to_quaint(
     column_type: ColumnType,
     column_name: &str,
 ) -> quaint::Result<QuaintValue<'static>> {
+    let parse_number_as_i64 = |n: &serde_json::Number| {
+        n.as_i64().ok_or(conversion_error!(
+            "number must be an integer in column '{column_name}', got '{n}'"
+        ))
+    };
+
     //  Note for the future: it may be worth revisiting how much bloat so many panics with different static
     // strings add to the compiled artefact, and in case we should come up with a restricted set of panic
     // messages, or even find a way of removing them altogether.
@@ -259,8 +265,7 @@ fn js_value_to_quaint(
         ColumnType::Int32 => match json_value {
             serde_json::Value::Number(n) => {
                 // n.as_i32() is not implemented, so we need to downcast from i64 instead
-                n.as_i64()
-                    .ok_or(conversion_error!("number must be an integer in column '{column_name}'"))
+                parse_number_as_i64(&n)
                     .and_then(|n| -> quaint::Result<i32> {
                         n.try_into()
                             .map_err(|e| conversion_error!("cannot convert {n} to i32 in column '{column_name}': {e}"))
@@ -276,9 +281,7 @@ fn js_value_to_quaint(
             )),
         },
         ColumnType::Int64 => match json_value {
-            serde_json::Value::Number(n) => n.as_i64().map(QuaintValue::int64).ok_or(conversion_error!(
-                "number must be an i64 in column '{column_name}', got {n}"
-            )),
+            serde_json::Value::Number(n) => parse_number_as_i64(&n).map(QuaintValue::int64),
             serde_json::Value::String(s) => s.parse::<i64>().map(QuaintValue::int64).map_err(|e| {
                 conversion_error!("string-encoded number must be an i64 in column '{column_name}', got {s}: {e}")
             }),
@@ -859,7 +862,7 @@ mod proxy_test {
         let s = "13:02:20.321";
         let json_value = serde_json::Value::String(s.to_string());
         let quaint_value = js_value_to_quaint(json_value, column_type, "column_name").unwrap();
-        let time: NaiveTime = NaiveTime::from_hms_milli_opt(13, 02, 20, 321).unwrap();
+        let time: NaiveTime = NaiveTime::from_hms_milli_opt(13, 2, 20, 321).unwrap();
         assert_eq!(quaint_value, QuaintValue::time(time));
     }
 
