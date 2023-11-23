@@ -45,25 +45,13 @@ impl TransactionCapable for Mssql {
             .or(self.url.query_params.transaction_isolation_level)
             .or(Some(SQL_SERVER_DEFAULT_ISOLATION));
 
-        let mut transaction_depth = self.transaction_depth.lock().await;
-        *transaction_depth += 1;
-        let st_depth = *transaction_depth;
-
-        let begin_statement = self.begin_statement(st_depth).await;
-        let commit_stmt = self.commit_statement(st_depth).await;
-        let rollback_stmt = self.rollback_statement(st_depth).await;
-
-        println!("start_transaction: {}", begin_statement);
-
         let opts = TransactionOptions::new(
             isolation,
             self.requires_isolation_first(),
             self.transaction_depth.clone(),
-            commit_stmt,
-            rollback_stmt,
         );
 
-        Ok(Box::new(DefaultTransaction::new(self, &begin_statement, opts).await?))
+        Ok(Box::new(DefaultTransaction::new(self, opts).await?))
     }
 }
 

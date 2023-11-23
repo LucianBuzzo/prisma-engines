@@ -144,32 +144,14 @@ macro_rules! impl_default_TransactionCapable {
                 &'a self,
                 isolation: Option<IsolationLevel>,
             ) -> crate::Result<Box<dyn crate::connector::Transaction + 'a>> {
-                let depth = self.transaction_depth.clone();
-                let mut depth_guard = self.transaction_depth.lock().await;
-                *depth_guard += 1;
-
-                let st_depth = *depth_guard;
-
-                println!("start_transaction: {}", st_depth);
-
-                let begin_statement = self.begin_statement(st_depth).await;
-                let commit_stmt = self.commit_statement(st_depth).await;
-                let rollback_stmt = self.rollback_statement(st_depth).await;
-
-                println!("begin_statement: {}", begin_statement);
-                println!("commit_statement: {}", commit_stmt);
-                println!("rollback_statement: {}", rollback_stmt);
-
                 let opts = crate::connector::TransactionOptions::new(
                     isolation,
                     self.requires_isolation_first(),
-                    depth,
-                    commit_stmt,
-                    rollback_stmt,
+                    self.transaction_depth.clone(),
                 );
 
                 Ok(Box::new(
-                    crate::connector::DefaultTransaction::new(self, &begin_statement, opts).await?,
+                    crate::connector::DefaultTransaction::new(self, opts).await?,
                 ))
             }
         }

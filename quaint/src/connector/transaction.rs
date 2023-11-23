@@ -35,12 +35,6 @@ pub(crate) struct TransactionOptions {
 
     /// The depth of the transaction, used to determine the nested transaction statements.
     pub depth: Arc<Mutex<i32>>,
-
-    /// The statement to use to commit the transaction.
-    pub commit_stmt: String,
-
-    /// The statement to use to rollback the transaction.
-    pub rollback_stmt: String,
 }
 
 /// A default representation of an SQL database transaction. If not commited, a
@@ -51,21 +45,16 @@ pub(crate) struct TransactionOptions {
 pub struct DefaultTransaction<'a> {
     pub inner: &'a dyn Queryable,
     pub depth: Arc<Mutex<i32>>,
-    pub commit_stmt: String,
-    pub rollback_stmt: String,
 }
 
 impl<'a> DefaultTransaction<'a> {
     pub(crate) async fn new(
         inner: &'a dyn Queryable,
-        begin_stmt: &str,
         tx_opts: TransactionOptions,
     ) -> crate::Result<DefaultTransaction<'a>> {
-        let this = Self {
+        let mut this = Self {
             inner,
             depth: tx_opts.depth,
-            commit_stmt: tx_opts.commit_stmt,
-            rollback_stmt: tx_opts.rollback_stmt,
         };
 
         if tx_opts.isolation_first {
@@ -74,7 +63,7 @@ impl<'a> DefaultTransaction<'a> {
             }
         }
 
-        inner.raw_cmd(begin_stmt).await?;
+        this.begin().await?;
 
         if !tx_opts.isolation_first {
             if let Some(isolation) = tx_opts.isolation_level {
@@ -84,7 +73,6 @@ impl<'a> DefaultTransaction<'a> {
 
         inner.server_reset_query(&this).await?;
 
-        increment_gauge!("prisma_client_queries_active", 1.0);
         Ok(this)
     }
 }
@@ -92,7 +80,7 @@ impl<'a> DefaultTransaction<'a> {
 #[async_trait]
 impl<'a> Transaction for DefaultTransaction<'a> {
     async fn begin(&mut self) -> crate::Result<()> {
-        decrement_gauge!("prisma_client_queries_active", 1.0);
+        increment_gauge!("prisma_client_queries_active", 1.0);
 
         let mut depth_guard = self.depth.lock().await;
 
@@ -116,9 +104,9 @@ impl<'a> Transaction for DefaultTransaction<'a> {
 
         let st_depth = *depth_guard;
 
-        let commit_stmt = self.inner.commit_statement(st_depth).await;
+        let commit_statement = self.inner.commit_statement(st_depth).await;
 
-        self.inner.raw_cmd(&commit_stmt).await?;
+        self.inner.raw_cmd(&commit_statement).await?;
 
         // Modify the depth value through the MutexGuard
         *depth_guard -= 1;
@@ -253,15 +241,11 @@ impl TransactionOptions {
         isolation_level: Option<IsolationLevel>,
         isolation_first: bool,
         depth: Arc<Mutex<i32>>,
-        commit_stmt: String,
-        rollback_stmt: String,
     ) -> Self {
         Self {
             isolation_level,
             isolation_first,
             depth,
-            commit_stmt,
-            rollback_stmt,
         }
     }
 }
