@@ -101,7 +101,7 @@ impl<'a> Transaction for DefaultTransaction<'a> {
 
         let st_depth = *depth_guard;
 
-        let begin_statement = self.begin_statement(st_depth).await;
+        let begin_statement = self.inner.begin_statement(st_depth).await;
 
         self.inner.raw_cmd(&begin_statement).await?;
 
@@ -116,7 +116,7 @@ impl<'a> Transaction for DefaultTransaction<'a> {
 
         let st_depth = *depth_guard;
 
-        let commit_stmt = self.commit_statement(st_depth).await;
+        let commit_stmt = self.inner.commit_statement(st_depth).await;
 
         self.inner.raw_cmd(&commit_stmt).await?;
 
@@ -132,7 +132,11 @@ impl<'a> Transaction for DefaultTransaction<'a> {
 
         let mut depth_guard = self.depth.lock().await;
 
-        self.inner.raw_cmd(&self.rollback_stmt).await?;
+        let st_depth = *depth_guard;
+
+        let rollback_statement = self.inner.rollback_statement(st_depth).await;
+
+        self.inner.raw_cmd(&rollback_statement).await?;
 
         // Modify the depth value through the MutexGuard
         *depth_guard -= 1;

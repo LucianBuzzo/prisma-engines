@@ -150,9 +150,15 @@ macro_rules! impl_default_TransactionCapable {
 
                 let st_depth = *depth_guard;
 
+                println!("start_transaction: {}", st_depth);
+
                 let begin_statement = self.begin_statement(st_depth).await;
                 let commit_stmt = self.commit_statement(st_depth).await;
                 let rollback_stmt = self.rollback_statement(st_depth).await;
+
+                println!("begin_statement: {}", begin_statement);
+                println!("commit_statement: {}", commit_stmt);
+                println!("rollback_statement: {}", rollback_stmt);
 
                 let opts = crate::connector::TransactionOptions::new(
                     isolation,

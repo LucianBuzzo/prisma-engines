@@ -74,6 +74,7 @@ impl Queryable for PooledConnection {
     }
 
     async fn rollback_statement(&self, depth: i32) -> String {
+        println!("rollback_statement: {}", depth);
         self.inner.rollback_statement(depth).await
     }
 
