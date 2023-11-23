@@ -137,8 +137,6 @@ impl Queryable for Mssql {
         metrics::query("mssql.query_raw", sql, params, move || async move {
             let mut client = self.client.lock().await;
 
-            println!("{}", sql);
-
             let mut query = tiberius::Query::new(sql);
 
             for param in params {
@@ -196,8 +194,6 @@ impl Queryable for Mssql {
             let mut client = self.client.lock().await;
             let changes = self.perform_io(query.execute(&mut client)).await?.total();
 
-            println!("{}", sql);
-
             Ok(changes)
         })
         .await
@@ -208,7 +204,6 @@ impl Queryable for Mssql {
     }
 
     async fn raw_cmd(&self, cmd: &str) -> crate::Result<()> {
-        println!("raw_cmd: {}", cmd);
         metrics::query("mssql.raw_cmd", cmd, &[], move || async move {
             let mut client = self.client.lock().await;
             self.perform_io(client.simple_query(cmd)).await?.into_results().await?;
